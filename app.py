@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 import io
 import os
+import json
 
 # Especificar un directorio personalizado para los datos de NLTK
 nltk_data_path = os.path.join(os.getcwd(), "nltk_data")
@@ -44,29 +45,44 @@ with st.sidebar:
     work_title = st.text_input("Obra principal", "Cien años de soledad")
     analyze_button = st.button("Analizar")
 
-# Función para llamar a la API de Kluster.ai
+# Función para llamar a la API de Gemini
 def get_essay_from_api(author, work):
-    url = "https://api.kluster.ai/v1/chat/completions"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    api_key = st.secrets['GEMINI_API_KEY']
+    full_url = f"{url}?key={api_key}"
+    
     headers = {
-        "Authorization": f"Bearer {st.secrets['KLUSTERAI_API_KEY']}",
         "Content-Type": "application/json"
     }
+    
     prompt = f"""Escribe un ensayo académico de más de 5000 palabras que combine estudios literarios, históricos y antropológicos para analizar la obra '{work}' de {author}. 
     Incluye una introducción, análisis detallado, conclusiones y citas de fuentes académicas reales en formato APA."""
     
     payload = {
-        "model": "google/gemma-3-27b-it",
-        "max_completion_tokens": 7640,
-        "temperature": 0.6,
-        "top_p": 1,
-        "messages": [{"role": "user", "content": prompt}]
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": prompt
+                    }
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 1,
+            "topK": 40,
+            "topP": 0.95,
+            "maxOutputTokens": 8192,
+            "responseMimeType": "text/plain"
+        }
     }
     
-    response = requests.post(url, headers=headers, json=payload)
+    response = requests.post(full_url, headers=headers, json=payload)
     if response.status_code == 200:
-        return response.json()['choices'][0]['message']['content']
+        return response.json()['candidates'][0]['content']['parts'][0]['text']
     else:
-        return f"Error en la API: {response.status_code}"
+        return f"Error en la API: {response.status_code} - {response.text}"
 
 # Función para análisis lingüístico
 def linguistic_analysis(text):
@@ -157,4 +173,4 @@ if analyze_button:
 
 # Footer
 st.markdown("---")
-st.write("Desarrollado con Streamlit y Kluster.ai API - Marzo 2025")
+st.write("Desarrollado con Streamlit y Gemini API - Marzo 2025")
