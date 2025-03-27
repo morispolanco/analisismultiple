@@ -22,6 +22,10 @@ try:
 except LookupError:
     nltk.download('punkt', download_dir=nltk_data_path)
 try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    nltk.download('punkt_tab', download_dir=nltk_data_path)
+try:
     nltk.data.find('corpora/stopwords')
 except LookupError:
     nltk.download('stopwords', download_dir=nltk_data_path)
@@ -109,44 +113,47 @@ if analyze_button:
         # Obtener ensayo de la API
         essay = get_essay_from_api(author_name, work_title)
         
-        # Análisis lingüístico
-        freq, tokens = linguistic_analysis(essay)
-        
-        # Visualizaciones
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Word Cloud
-            st.subheader("Nube de palabras")
-            wordcloud = WordCloud(width=800, height=400).generate_from_frequencies(dict(freq))
-            plt.figure(figsize=(10, 5))
-            plt.imshow(wordcloud, interpolation='bilinear')
-            plt.axis('off')
-            st.pyplot(plt)
-        
-        with col2:
-            # Frecuencia de palabras
-            st.subheader("Palabras más frecuentes")
-            plt.figure(figsize=(10, 5))
-            freq.plot(20, cumulative=False)
-            st.pyplot(plt)
-        
-        # Mostrar ensayo
-        st.subheader("Ensayo Generado")
-        st.write(essay[:2000] + "... [continúa]")
-        
-        # Exportar a Word
-        doc = create_word_doc(essay, author_name, work_title, freq)
-        buffer = io.BytesIO()
-        doc.save(buffer)
-        buffer.seek(0)
-        
-        st.download_button(
-            label="Descargar ensayo en Word",
-            data=buffer,
-            file_name=f"Analisis_{author_name}_{work_title}.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
+        if "Error en la API" in essay:
+            st.error(essay)
+        else:
+            # Análisis lingüístico
+            freq, tokens = linguistic_analysis(essay)
+            
+            # Visualizaciones
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Word Cloud
+                st.subheader("Nube de palabras")
+                wordcloud = WordCloud(width=800, height=400).generate_from_frequencies(dict(freq))
+                plt.figure(figsize=(10, 5))
+                plt.imshow(wordcloud, interpolation='bilinear')
+                plt.axis('off')
+                st.pyplot(plt)
+            
+            with col2:
+                # Frecuencia de palabras
+                st.subheader("Palabras más frecuentes")
+                plt.figure(figsize=(10, 5))
+                freq.plot(20, cumulative=False)
+                st.pyplot(plt)
+            
+            # Mostrar ensayo
+            st.subheader("Ensayo Generado")
+            st.write(essay[:2000] + "... [continúa]")
+            
+            # Exportar a Word
+            doc = create_word_doc(essay, author_name, work_title, freq)
+            buffer = io.BytesIO()
+            doc.save(buffer)
+            buffer.seek(0)
+            
+            st.download_button(
+                label="Descargar ensayo en Word",
+                data=buffer,
+                file_name=f"Analisis_{author_name}_{work_title}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
 
 # Footer
 st.markdown("---")
