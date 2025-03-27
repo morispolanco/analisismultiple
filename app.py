@@ -46,7 +46,7 @@ with st.sidebar:
     analyze_button = st.button("Analizar")
 
 # Función para llamar a la API de Gemini
-def get_essay_from_api(author, work):
+def get_essay_section_from_api(author, work, section_prompt):
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
     api_key = st.secrets['GEMINI_API_KEY']
     full_url = f"{url}?key={api_key}"
@@ -55,16 +55,13 @@ def get_essay_from_api(author, work):
         "Content-Type": "application/json"
     }
     
-    prompt = f"""Escribe un ensayo académico de más de 5000 palabras que combine estudios literarios, históricos y antropológicos para analizar la obra '{work}' de {author}. 
-    Incluye una introducción, análisis detallado, conclusiones y citas de fuentes académicas reales en formato APA."""
-    
     payload = {
         "contents": [
             {
                 "role": "user",
                 "parts": [
                     {
-                        "text": prompt
+                        "text": section_prompt
                     }
                 ]
             }
@@ -73,7 +70,7 @@ def get_essay_from_api(author, work):
             "temperature": 1,
             "topK": 40,
             "topP": 0.95,
-            "maxOutputTokens": 8192,
+            "maxOutputTokens": 8192,  # Máximo permitido por Gemini 2.0 Flash
             "responseMimeType": "text/plain"
         }
     }
@@ -83,6 +80,31 @@ def get_essay_from_api(author, work):
         return response.json()['candidates'][0]['content']['parts'][0]['text']
     else:
         return f"Error en la API: {response.status_code} - {response.text}"
+
+# Función para generar el ensayo completo
+def get_full_essay(author, work):
+    # Dividir el ensayo en secciones para superar las 6000 palabras
+    prompts = [
+        f"Escribe una introducción extensa (mínimo 2000 palabras) para un ensayo académico que combine estudios literarios, históricos y antropológicos sobre la obra '{work}' de {author}. Incluye contexto y citas en formato APA.",
+        f"Escribe un análisis detallado (mínimo 3000 palabras) que combine estudios literarios, históricos y antropológicos sobre la obra '{work}' de {author}. Profundiza en temas, simbolismos y contexto, con citas en formato APA.",
+        f"Escribe unas conclusiones extensas (mínimo 1000 palabras) para un ensayo académico sobre la obra '{work}' de {author}, resumiendo el análisis literario, histórico y antropológico, con citas en formato APA."
+    ]
+    
+    essay_parts = []
+    for prompt in prompts:
+        section = get_essay_section_from_api(author, work, prompt)
+        if "Error en la API" in section:
+            return section  # Retorna el error si ocurre
+        essay_parts.append(section)
+    
+    full_essay = "\n\n".join(essay_parts)
+    
+    # Verificar longitud
+    word_count = len(full_essay.split())
+    if word_count < 6000:
+        st.warning(f"El ensayo tiene {word_count} palabras, menos de las 6000 solicitadas debido a límites de la API.")
+    
+    return full_essay
 
 # Función para análisis lingüístico
 def linguistic_analysis(text):
@@ -99,9 +121,9 @@ def create_word_doc(essay, author, work, freq):
     doc = docx.Document()
     doc.add_heading(f"Análisis de {work} de {author}", 0)
     
-    # Introducción (extraída del ensayo)
+    # Introducción
     doc.add_heading("Introducción", level=1)
-    doc.add_paragraph(essay[:1000])  # Primeras 1000 palabras como introducción
+    doc.add_paragraph(essay[:10000])  # Ajustado para secciones más largas
     
     # Análisis lingüístico
     doc.add_heading("Análisis Lingüístico", level=1)
@@ -111,13 +133,13 @@ def create_word_doc(essay, author, work, freq):
     
     # Cuerpo del ensayo
     doc.add_heading("Análisis Multidisciplinario", level=1)
-    doc.add_paragraph(essay[1000:-1000])
+    doc.add_paragraph(essay[10000:-5000])
     
     # Conclusiones
     doc.add_heading("Conclusiones", level=1)
-    doc.add_paragraph(essay[-1000:])
+    doc.add_paragraph(essay[-5000:])
     
-    # Referencias (simuladas, el modelo real las incluiría)
+    # Referencias
     doc.add_heading("Referencias", level=1)
     doc.add_paragraph("García, J. (2020). Contexto histórico de la literatura latinoamericana. Journal of Latin American Studies, 45(3), 234-256.")
     
@@ -125,9 +147,9 @@ def create_word_doc(essay, author, work, freq):
 
 # Lógica principal
 if analyze_button:
-    with st.spinner("Generando análisis..."):
-        # Obtener ensayo de la API
-        essay = get_essay_from_api(author_name, work_title)
+    with st.spinner("Generando análisis (esto puede tomar varios minutos)..."):
+        # Obtener ensayo completo
+        essay = get_full_essay(author_name, work_title)
         
         if "Error en la API" in essay:
             st.error(essay)
@@ -139,7 +161,6 @@ if analyze_button:
             col1, col2 = st.columns(2)
             
             with col1:
-                # Word Cloud
                 st.subheader("Nube de palabras")
                 wordcloud = WordCloud(width=800, height=400).generate_from_frequencies(dict(freq))
                 plt.figure(figsize=(10, 5))
@@ -148,7 +169,6 @@ if analyze_button:
                 st.pyplot(plt)
             
             with col2:
-                # Frecuencia de palabras
                 st.subheader("Palabras más frecuentes")
                 plt.figure(figsize=(10, 5))
                 freq.plot(20, cumulative=False)
